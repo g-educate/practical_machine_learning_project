@@ -1,0 +1,94 @@
+---
+title: "Practial Machine Learning~Write up"
+output: html_document
+---
+
+Executive Summary: The goal of the project is to use the data from  accelerometers on the belt, forearm, arm, and dumbell of 6 participants. We create a model using the data and use the same to predict test cases. We are going to divide the training dataset provided into two- one for a training dataset that we will use to create a model, and the second to use to cross-validate it. Then we use the model to predict the classe variable in the test dataset.
+
+```{r, eval=FALSE}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "training.csv", method ="auto")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "testing.csv", method = "auto")
+```
+
+Create the training, cross-validate dataset and the testing dataset.
+
+```{r, message=FALSE}
+library(caret)
+
+train <- read.csv("training.csv", header = TRUE, sep = ",")
+intrain <- createDataPartition(train$classe, p=0.70, list=FALSE)
+training <- train[intrain, ]
+cross_validate <- train[-intrain,]
+testing <- read.csv("testing.csv", header = TRUE, sep = ",")
+```
+
+Data Analysis: 
+```{r, eval=FALSE}
+summary(train)
+names(train)
+unique(train$classe)
+head(training)
+names(testing)
+```
+Looking at the training dataset there are some columns that have NA values which needs to be removed. We can also remove the first seven columns that we are not going to use in prediction.
+```{r}
+training[training==""] <- NA
+training <- training[,colSums(is.na(training)) == 0] 
+training <- training[, 8:60]
+```
+
+Next we can check if there are any near zero variance.
+```{r, results='hide'}
+nsv <- nearZeroVar(training, saveMetrics = TRUE)
+nsv
+str(nsv, vec.len=2)
+nsv[nsv[,"zeroVar"]>0,]
+nsv[nsv[,"zeroVar"] + nsv[,"nzv"]>0,]
+```
+
+From the above, we can conclude that there are no near zero variance predictors.
+
+Next lets check if there are any variables that are strongly correlated to each other.
+
+```{r, results='hide'}
+M <- abs(cor(training[, -53]))
+diag(M) <- 0
+which(M > 0.8, arr.ind = T)
+
+```
+
+From the above, we can conclude that we have to include all of the variables as none of them are correlated to each other strongly enough.
+
+```{r, message=FALSE}
+library(randomForest)
+set.seed(123)
+fit <- randomForest(classe~., data=training)
+fit
+```
+
+We can use the above model to predict the classe variable in the cross-validation dataset.
+
+```{r}
+predict_cross_validate <- predict(fit, newdata = cross_validate)
+confusionMatrix(predict_cross_validate, cross_validate$classe)
+
+```
+
+The out of sample error rate is one minus the overall accuracy from the above prediction with the cross vaildation dataset. Hence the out of sample error rate is-
+
+```{r, results='hide'}
+out_of_sample_error_rate <-  (1 - confusionMatrix(predict_cross_validate,cross_validate$classe)$overall["Accuracy"] )
+out_of_sample_error_rate
+```
+
+**Out of sample error rate**
+```{r, echo=FALSE}
+as.numeric(out_of_sample_error_rate)
+```
+
+Predict the testing dataset as follows:
+
+```{r}
+predict_test_dataset <- predict(fit, newdata = testing)
+predict_test_dataset
+```
